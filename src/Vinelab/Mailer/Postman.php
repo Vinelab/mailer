@@ -16,6 +16,46 @@ use Swift_Mailer;
 Class Postman {
 
 	/**
+	 * Holds the names of protected variables that are allowed direct access
+	 * This is a convenience instead of introducing a getVar() method
+	 *
+	 * @var array
+	 */
+	protected $accessible = array('driver', 'host', 'port', 'username', 'password', 'encryption', 'sendmail_command', 'transport');
+
+	/**
+	 * @var Illuminate\Filesystem\Filesystem
+	 */
+	protected $_Filesystem;
+
+	/**
+	 * @var  Illuminate\Config\Fileloader
+	 */
+	protected $_FileLoader;
+
+	/**
+	 * @var Illuminate\Config\Repository
+	 */
+	protected $_Config;
+
+	/**
+	 * @var Swift_Mailer
+	 */
+	protected $_Swift_Mailer;
+
+	/**
+	 * This is an interface implemented by all Swiftmailer Transports
+	 *
+	 * @var Swift_Transport
+	 */
+	protected $_Swift_Transport;
+
+	/**
+	 * @var Swift_Message
+	 */
+	protected $_Swift_Message;
+
+	/**
 	 * Mail driver
 	 *
 	 * @var string
@@ -57,6 +97,13 @@ Class Postman {
 	protected $password;
 
 	/**
+	 * The sendmail command to run when the driver is 'sendmail'
+	 *
+	 * @var string
+	 */
+	protected $sendmail_command;
+
+	/**
 	 * The mail transport to use when sending mail
 	 *
 	 * @var \Swift_MailTransport | Swift_SmtpMailTransport | Swift_SendmailTransport
@@ -83,9 +130,21 @@ Class Postman {
 	 */
 	public $status = false;
 
-	public function __construct($environment = 'local')
-	{
-		$this->environment = $environment;
+	public function __construct(
+		\Illuminate\Filesystem\Filesystem $filesystem = null,
+		\Illuminate\Config\Fileloader $fileloader = null,
+		\Illuminate\Config\Repository $config = null,
+		\Swift_Mailer $swift_mailer = null,
+		\Swift_Transport $swift_transport = null,
+		\Swift_Message $swift_message = null
+	) {
+		$this->_Filesystem      = $filesystem;
+		$this->_FileLoader      = $fileloader;
+		$this->_Config          = $config;
+		$this->_Swift_Mailer    = $swift_mailer;
+		$this->_Swift_Transport = $swift_transport;
+		$this->_Swift_Message   = $swift_message;
+
 		$this->configure()->setUpTransport();
 	}
 
@@ -104,11 +163,6 @@ Class Postman {
 		return $this->transmit(compact('from', 'to', 'subject', 'body', 'content_type'));
 	}
 
-	public function mailStatus()
-	{
-		return $this->mail;
-	}
-
 	/**
 	 * Sets the configuration parameters of this mail instance
 	 * from a config or [ENVIRONMENT]/config directory
@@ -117,20 +171,20 @@ Class Postman {
 	 */
 	protected function configure()
 	{
-		$filesystem = new FileSystem();
-		$fileloader = new Fileloader($filesystem, $_SERVER['DOCUMENT_ROOT'].DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'config');
-		$config = new Config($fileloader, $this->environment);
-
-		$mail = (object) $config->get('mail');
-		$this->driver = $mail->driver;
+		$configuration = (object) $this->configuration();
+		$this->driver = $configuration->driver;
 
 		if ($this->driver == 'smtp')
 		{
-			$this->host       = $mail->host;
-			$this->port       = $mail->port;
-			$this->encryption = $mail->encryption;
-			$this->username   = $mail->username;
-			$this->password   = $mail->password;
+			$this->host       = $configuration->host;
+			$this->port       = $configuration->port;
+			$this->encryption = $configuration->encryption;
+			$this->username   = $configuration->username;
+			$this->password   = $configuration->password;
+
+		} elseif ($this->driver == 'sendmail'){
+
+			$this->sendmail_command = $configuration->sendmail;
 		}
 
 		return $this;
@@ -149,17 +203,17 @@ Class Postman {
 		switch($this->driver)
 		{
 			case 'mail':
-				$this->transport = Swift_MailTransport::newInstance();
+				$this->transport = $this->_Swift_Transport ?: Swift_MailTransport::newInstance();
 			break;
 
 			case 'smtp':
-				$this->transport = Swift_SmtpTransport::newInstance($this->host, $this->port, $this->encryption)
+				$this->transport = $this->_Swift_Transport ?: Swift_SmtpTransport::newInstance($this->host, $this->port, $this->encryption)
 					->setUsername($this->username)
 					->setPassword($this->password);
 			break;
 
 			case 'sendmail':
-				$this->transport = Swift_SendmailTransport::newInstance('/usr/sbin/sendmail -bs');
+				$this->transport = $this->_Swift_Transport ?: Swift_SendmailTransport::newInstance('/usr/sbin/sendmail -bs');
 			break;
 
 			default:
@@ -205,6 +259,35 @@ Class Postman {
 	 */
 	public function getMail()
 	{
-		return (!$this->mail instanceof Swift_Mailer) ? $this->mail = Swift_Mailer::newInstance($this->transport) : $this->mail;
+		return ($this->mail instanceof Swift_Mailer) ? $this->mail : $this->mail = Swift_Mailer::newInstance($this->transport);
+	}
+
+	/**
+	 * Loads the configuration file from the file system and returns its contents
+	 * @return array
+	 */
+	public function configuration()
+	{
+		$filesystem = $this->_Filesystem ?: new FileSystem();
+		$fileloader = $this->_FileLoader ?: new Fileloader($filesystem, $_SERVER['DOCUMENT_ROOT'].DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'config');
+		$config     = $this->_Config ?: new Config($fileloader, $this->environment);
+
+		return $config->get('mail');
+	}
+
+	public function __get($attribute)
+	{
+		$public_vars = get_class_vars(get_class($this));
+
+		if(isset($public_vars[$attribute]))
+		{
+			return $this->{$attribute};
+
+		} elseif (in_array($attribute, $this->accessible)) {
+
+			return $this->{$attribute};
+		}
+
+		return null;
 	}
 }
