@@ -1,0 +1,22 @@
+{
+    "name": "vinelab/mailer",
+    "description": "Handles sending emails with different configuration possibilities",
+    "require": {
+       "swiftmailer/swiftmailer": "4.3.*",
+        "illuminate/config": "4.0.5"
+    },
+    "require-dev":{
+        "phpunit/phpunit": "3.7.*@dev"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Abed Halawi",
+            "email": "halawi.abed@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-0": { "Vinelab\\Mailer":"src/" }
+    },
+    "minimum-stability": "dev"
+}
