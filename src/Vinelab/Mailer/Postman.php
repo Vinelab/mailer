@@ -1,293 +1,291 @@
-<?php namespace Vinelab\Mailer;
+<?php
+
+namespace Vinelab\Mailer;
 
 use Vinelab\Mailer\Exceptions\MailTransportException;
-
 use Illuminate\Config\FileLoader;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Config\Repository as Config;
-
 use Swift_Message;
 use Swift_MailTransport;
 use Swift_SendmailTransport;
 use Swift_SmtpTransport;
 use Swift_Mailer;
 
+class Postman
+{
+    /**
+     * Holds the names of protected variables that are allowed direct access
+     * This is a convenience instead of introducing a getVar() method.
+     *
+     * @var array
+     */
+    protected $accessible = array('driver', 'host', 'port', 'username', 'password', 'encryption', 'sendmail_command', 'transport');
 
-Class Postman {
+    /**
+     * @var Illuminate\Filesystem\Filesystem
+     */
+    protected $_Filesystem;
 
-	/**
-	 * Holds the names of protected variables that are allowed direct access
-	 * This is a convenience instead of introducing a getVar() method
-	 *
-	 * @var array
-	 */
-	protected $accessible = array('driver', 'host', 'port', 'username', 'password', 'encryption', 'sendmail_command', 'transport');
+    /**
+     * @var Illuminate\Config\Fileloader
+     */
+    protected $_FileLoader;
 
-	/**
-	 * @var Illuminate\Filesystem\Filesystem
-	 */
-	protected $_Filesystem;
+    /**
+     * @var Illuminate\Config\Repository
+     */
+    protected $_Config;
 
-	/**
-	 * @var  Illuminate\Config\Fileloader
-	 */
-	protected $_FileLoader;
+    /**
+     * @var Swift_Mailer
+     */
+    protected $_Swift_Mailer;
 
-	/**
-	 * @var Illuminate\Config\Repository
-	 */
-	protected $_Config;
+    /**
+     * This is an interface implemented by all Swiftmailer Transports.
+     *
+     * @var Swift_Transport
+     */
+    protected $_Swift_Transport;
 
-	/**
-	 * @var Swift_Mailer
-	 */
-	protected $_Swift_Mailer;
+    /**
+     * @var Swift_Message
+     */
+    protected $_Swift_Message;
 
-	/**
-	 * This is an interface implemented by all Swiftmailer Transports
-	 *
-	 * @var Swift_Transport
-	 */
-	protected $_Swift_Transport;
+    /**
+     * Mail driver.
+     *
+     * @var string
+     */
+    protected $driver;
 
-	/**
-	 * @var Swift_Message
-	 */
-	protected $_Swift_Message;
+    /**
+     * SMTP host address.
+     *
+     * @var string
+     */
+    protected $host;
 
-	/**
-	 * Mail driver
-	 *
-	 * @var string
-	 */
-	protected $driver;
+    /**
+     * SMTP host port.
+     *
+     * @var int
+     */
+    protected $port;
 
-	/**
-	 * SMTP host address
-	 *
-	 * @var string
-	 */
-	protected $host;
+    /**
+     * Mail encryption (ssl, tls, etc.).
+     *
+     * @var string
+     */
+    protected $encryption;
 
-	/**
-	 * SMTP host port
-	 *
-	 * @var integer
-	 */
-	protected $port;
+    /**
+     * SMTP server username.
+     *
+     * @var string
+     */
+    protected $username;
 
-	/**
-	 * Mail encryption (ssl, tls, etc.)
-	 * @var string
-	 */
-	protected $encryption;
+    /**
+     * SMTP server password.
+     *
+     * @var string
+     */
+    protected $password;
 
-	/**
-	 * SMTP server username
-	 *
-	 * @var string
-	 */
-	protected $username;
+    /**
+     * The sendmail command to run when the driver is 'sendmail'.
+     *
+     * @var string
+     */
+    protected $sendmail_command;
 
-	/**
-	 * SMTP server password
-	 *
-	 * @var string
-	 */
-	protected $password;
+    /**
+     * The mail transport to use when sending mail.
+     *
+     * @var \Swift_MailTransport | Swift_SmtpMailTransport | Swift_SendmailTransport
+     */
+    protected $transport;
 
-	/**
-	 * The sendmail command to run when the driver is 'sendmail'
-	 *
-	 * @var string
-	 */
-	protected $sendmail_command;
+    /**
+     * The mail being sent.
+     *
+     * @var Swift_Mailer
+     */
+    protected $mail;
 
-	/**
-	 * The mail transport to use when sending mail
-	 *
-	 * @var \Swift_MailTransport | Swift_SmtpMailTransport | Swift_SendmailTransport
-	 */
-	protected $transport;
+    /**
+     * The environment the mail should run under.
+     *
+     * @var string
+     */
+    public $environment;
 
-	/**
-	 * The mail being sent
-	 *
-	 * @var Swift_Mailer
-	 */
-	protected $mail;
+    /**
+     * Mail sending status.
+     *
+     * @var bool
+     */
+    public $status = false;
 
-	/**
-	 * The environment the mail should run under
-	 *
-	 * @var string
-	 */
-	public $environment;
+    public function __construct(
+        \Illuminate\Filesystem\Filesystem $filesystem = null,
+        \Illuminate\Config\Fileloader $fileloader = null,
+        \Illuminate\Config\Repository $config = null,
+        \Swift_Mailer $swift_mailer = null,
+        \Swift_Transport $swift_transport = null,
+        \Swift_Message $swift_message = null
+    ) {
+        $this->_Filesystem = $filesystem;
+        $this->_FileLoader = $fileloader;
+        $this->_Config = $config;
+        $this->_Swift_Mailer = $swift_mailer;
+        $this->_Swift_Transport = $swift_transport;
+        $this->_Swift_Message = $swift_message;
 
-	/**
-	 * Mail sending status
-	 * @var boolean
-	 */
-	public $status = false;
+        $this->configure()->setUpTransport();
+    }
 
-	public function __construct(
-		\Illuminate\Filesystem\Filesystem $filesystem = null,
-		\Illuminate\Config\Fileloader $fileloader = null,
-		\Illuminate\Config\Repository $config = null,
-		\Swift_Mailer $swift_mailer = null,
-		\Swift_Transport $swift_transport = null,
-		\Swift_Message $swift_message = null
-	) {
-		$this->_Filesystem      = $filesystem;
-		$this->_FileLoader      = $fileloader;
-		$this->_Config          = $config;
-		$this->_Swift_Mailer    = $swift_mailer;
-		$this->_Swift_Transport = $swift_transport;
-		$this->_Swift_Message   = $swift_message;
+    /**
+     * Instantiates and sends a Postman mail instance.
+     *
+     * @param string|array $from         sender email address OR [email=>name]
+     * @param string|array $to           recipient email address OR [email=>name]
+     * @param string       $subject
+     * @param string       $body
+     * @param string       $content_type
+     *
+     * @return \Vinelab\Mailer\Postman
+     */
+    public function send($from, $to, $subject, $body, $content_type = 'text/html')
+    {
+        return $this->transmit(compact('from', 'to', 'subject', 'body', 'content_type'));
+    }
 
-		$this->configure()->setUpTransport();
-	}
+    /**
+     * Sets the configuration parameters of this mail instance
+     * from a config or [ENVIRONMENT]/config directory.
+     *
+     * @return \Vinelab\Mailer\Postman
+     */
+    protected function configure()
+    {
+        $configuration = (object) $this->configuration();
+        $this->driver = $configuration->driver;
 
-	/**
-	 * Instantiates and sends a Postman mail instance
-	 *
-	 * @param  string|array $from   sender email address OR [email=>name]
-	 * @param  string|array $to    	recipient email address OR [email=>name]
-	 * @param  string $subject
-	 * @param  string $body
-	 * @param  string $content_type
-	 * @return \Vinelab\Mailer\Postman
-	 */
-	public function send($from, $to, $subject, $body, $content_type = 'text/html')
-	{
-		return $this->transmit(compact('from', 'to', 'subject', 'body', 'content_type'));
-	}
+        if ($this->driver == 'smtp') {
+            $this->host = $configuration->host;
+            $this->port = $configuration->port;
+            $this->encryption = $configuration->encryption;
+            $this->username = $configuration->username;
+            $this->password = $configuration->password;
+        } elseif ($this->driver == 'sendmail') {
+            $this->sendmail_command = $configuration->sendmail;
+        }
 
-	/**
-	 * Sets the configuration parameters of this mail instance
-	 * from a config or [ENVIRONMENT]/config directory
-	 *
-	 * @return \Vinelab\Mailer\Postman
-	 */
-	protected function configure()
-	{
-		$configuration = (object) $this->configuration();
-		$this->driver = $configuration->driver;
+        return $this;
+    }
 
-		if ($this->driver == 'smtp')
-		{
-			$this->host       = $configuration->host;
-			$this->port       = $configuration->port;
-			$this->encryption = $configuration->encryption;
-			$this->username   = $configuration->username;
-			$this->password   = $configuration->password;
+    /**
+     * Prepares the transport for delivery
+     * instantiates a Swift Mailer Transport of different types and
+     * sets @var $this->transport
+     * has support for "mail", "sendmail", "smtp".
+     *
+     * @return \Vinelab\Mailer\Postman
+     */
+    protected function setUpTransport()
+    {
+        switch ($this->driver) {
+            case 'mail':
+                $this->transport = $this->_Swift_Transport ?: Swift_MailTransport::newInstance();
+            break;
 
-		} elseif ($this->driver == 'sendmail'){
+            case 'smtp':
+                $this->transport = $this->_Swift_Transport ?: Swift_SmtpTransport::newInstance($this->host, $this->port, $this->encryption)
+                    ->setUsername($this->username)
+                    ->setPassword($this->password);
+            break;
 
-			$this->sendmail_command = $configuration->sendmail;
-		}
+            case 'sendmail':
+                $this->transport = $this->_Swift_Transport ?: Swift_SendmailTransport::newInstance('/usr/sbin/sendmail -bs');
+            break;
 
-		return $this;
-	}
+            default:
+                throw new MailTransportException('Unrecognized Mail Driver');
+            break;
+        }
 
-	/**
-	 * Prepares the transport for delivery
-	 * instantiates a Swift Mailer Transport of different types and
-	 * sets @var $this->transport
-	 * has support for "mail", "sendmail", "smtp"
-	 *
-	 * @return  \Vinelab\Mailer\Postman
-	 */
-	protected function setUpTransport()
-	{
-		switch($this->driver)
-		{
-			case 'mail':
-				$this->transport = $this->_Swift_Transport ?: Swift_MailTransport::newInstance();
-			break;
+        return $this;
+    }
 
-			case 'smtp':
-				$this->transport = $this->_Swift_Transport ?: Swift_SmtpTransport::newInstance($this->host, $this->port, $this->encryption)
-					->setUsername($this->username)
-					->setPassword($this->password);
-			break;
+    /**
+     * Encloses a message into a Swift_Message.
+     *
+     * @param array $message
+     *
+     * @return Swift_Message
+     */
+    protected function enclose($message)
+    {
+        return Swift_Message::newInstance()
+                    ->setSubject($message['subject'])
+                    ->setFrom($message['from'])
+                    ->setTo($message['to'])
+                    ->setBody($message['body'], $message['content_type']);
+    }
 
-			case 'sendmail':
-				$this->transport = $this->_Swift_Transport ?: Swift_SendmailTransport::newInstance('/usr/sbin/sendmail -bs');
-			break;
+    /**
+     * Transmits a mail.
+     *
+     * @param array $message
+     *
+     * @return \Vinelab\Mailer\Postman
+     */
+    protected function transmit($message)
+    {
+        $this->status = $this->getMail()->send($this->enclose($message));
 
-			default:
-				throw new MailTransportException('Unrecognized Mail Driver');
-			break;
-		}
+        return $this;
+    }
 
-		return $this;
-	}
+    /**
+     * Lazy instantiates a Swift_Mailer instance.
+     *
+     * @return Swift_Mailer
+     */
+    public function getMail()
+    {
+        return ($this->mail instanceof Swift_Mailer) ? $this->mail : $this->mail = Swift_Mailer::newInstance($this->transport);
+    }
 
-	/**
-	 * Encloses a message into a Swift_Message
-	 *
-	 * @param  array $message
-	 * @return Swift_Message
-	 */
-	protected function enclose($message)
-	{
-		return Swift_Message::newInstance()
-					->setSubject($message['subject'])
-					->setFrom($message['from'])
-					->setTo($message['to'])
-					->setBody($message['body'], $message['content_type']);
-	}
+    /**
+     * Loads the configuration file from the file system and returns its contents.
+     *
+     * @return array
+     */
+    public function configuration()
+    {
+        $filesystem = $this->_Filesystem ?: new FileSystem();
+        $fileloader = $this->_FileLoader ?: new Fileloader($filesystem, $_SERVER['DOCUMENT_ROOT'].DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'config');
+        $config = $this->_Config ?: new Config($fileloader, $this->environment);
 
-	/**
-	 * Transmits a mail
-	 *
-	 * @param  array $message
-	 * @return \Vinelab\Mailer\Postman
-	 */
-	protected function transmit($message)
-	{
+        return $config->get('mail');
+    }
 
-		$this->status = $this->getMail()->send($this->enclose($message));
-		return $this;
-	}
+    public function __get($attribute)
+    {
+        $public_vars = get_class_vars(get_class($this));
 
-	/**
-	 * Lazy instantiates a Swift_Mailer instance
-	 *
-	 * @return Swift_Mailer
-	 */
-	public function getMail()
-	{
-		return ($this->mail instanceof Swift_Mailer) ? $this->mail : $this->mail = Swift_Mailer::newInstance($this->transport);
-	}
+        if (isset($public_vars[$attribute])) {
+            return $this->{$attribute};
+        } elseif (in_array($attribute, $this->accessible)) {
+            return $this->{$attribute};
+        }
 
-	/**
-	 * Loads the configuration file from the file system and returns its contents
-	 * @return array
-	 */
-	public function configuration()
-	{
-		$filesystem = $this->_Filesystem ?: new FileSystem();
-		$fileloader = $this->_FileLoader ?: new Fileloader($filesystem, $_SERVER['DOCUMENT_ROOT'].DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'config');
-		$config     = $this->_Config ?: new Config($fileloader, $this->environment);
-
-		return $config->get('mail');
-	}
-
-	public function __get($attribute)
-	{
-		$public_vars = get_class_vars(get_class($this));
-
-		if(isset($public_vars[$attribute]))
-		{
-			return $this->{$attribute};
-
-		} elseif (in_array($attribute, $this->accessible)) {
-
-			return $this->{$attribute};
-		}
-
-		return null;
-	}
+        return;
+    }
 }
